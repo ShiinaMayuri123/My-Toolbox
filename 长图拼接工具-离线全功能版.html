@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>我的在线工具箱 (离线全功能版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/@remix-run/router@1.15.0/dist/router.umd.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-router@6.22.0/dist/umd/react-router.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-router-dom@6.22.0/dist/umd/react-router-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+    <style>
+      /* Global Scale Adjustment */
+      html { font-size: 13px; }
+      @media (max-width: 768px) { html { font-size: 15px; } } /* Keep mobile legible */
+
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      @keyframes blob { 0% { transform: translate(0px, 0px) scale(1); } 33% { transform: translate(50px, -60px) scale(1.2); } 66% { transform: translate(-30px, 40px) scale(0.8); } 100% { transform: translate(0px, 0px) scale(1); } }
+      .animate-blob { animation: blob 8s infinite; } .animation-delay-2000 { animation-delay: 2s; } .animation-delay-4000 { animation-delay: 4s; }
+      .animate-in { animation-duration: 0.5s; animation-fill-mode: both; }
+      .fade-in { animation-name: fadeIn; }
+      .slide-in-from-bottom-4 { animation-name: slideInBottom4; }
+      .slide-in-from-bottom-8 { animation-name: slideInBottom8; }
+      .zoom-in-95 { animation-name: zoomIn95; }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes slideInBottom4 { from { transform: translateY(1rem); } to { transform: translateY(0); } }
+      @keyframes slideInBottom8 { from { transform: translateY(2rem); } to { transform: translateY(0); } }
+      @keyframes zoomIn95 { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-800 antialiased selection:bg-slate-200 selection:text-slate-900">
+    <div id="root"></div>
+    <script type="text/babel" data-presets="react,typescript">
+      const { useState, useEffect, useCallback, useRef, useContext, createContext } = React;
+      const { HashRouter, Routes, Route, Link, useNavigate } = ReactRouterDOM;
+      const { jsPDF } = window.jspdf || { jsPDF: class {} };
+      
+      // --- ICONS ---
+      const IconBase = ({ size = 24, className = "", children, ...props }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>{children}</svg>);
+      const Layers = (p) => <IconBase {...p}><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></IconBase>;
+      const Download = (p) => <IconBase {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></IconBase>;
+      const Plus = (p) => <IconBase {...p}><path d="M5 12h14" /><path d="M12 5v14" /></IconBase>;
+      const Minus = (p) => <IconBase {...p}><path d="M5 12h14" /></IconBase>;
+      const Home = (p) => <IconBase {...p}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></IconBase>;
+      const Settings = (p) => <IconBase {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></IconBase>;
+      const Trash2 = (p) => <IconBase {...p}><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" /></IconBase>;
+      const ArrowUp = (p) => <IconBase {...p}><path d="m5 12 7-7 7 7" /><path d="M12 19V5" /></IconBase>;
+      const ArrowDown = (p) => <IconBase {...p}><path d="M12 5v14" /><path d="m19 12-7 7-7-7" /></IconBase>;
+      const AlignVerticalSpaceAround = (p) => <IconBase {...p}><rect width="10" height="6" x="7" y="9" rx="2" /><path d="M22 20H2" /><path d="M22 4H2" /></IconBase>;
+      const AlignHorizontalSpaceAround = (p) => <IconBase {...p}><rect width="6" height="10" x="9" y="7" rx="2" /><path d="M4 22V2" /><path d="M20 22V2" /></IconBase>;
+      const ImageIcon = (p) => <IconBase {...p}><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></IconBase>;
+      const X = (p) => <IconBase {...p}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></IconBase>;
+      const Sliders = (p) => <IconBase {...p}><line x1="4" x2="4" y1="21" y2="14" /><line x1="4" x2="4" y1="10" y2="3" /><line x1="12" x2="12" y1="21" y2="12" /><line x1="12" x2="12" y1="8" y2="3" /><line x1="20" x2="20" y1="21" y2="16" /><line x1="20" x2="20" y1="12" y2="3" /><line x1="2" x2="6" y1="14" y2="14" /><line x1="10" x2="14" y1="8" y2="8" /><line x1="18" x2="22" y1="16" y2="16" /></IconBase>;
+      const FileImage = (p) => <IconBase {...p}><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><circle cx="10" cy="13" r="2" /><path d="m20 17-1.09-1.09a2 2 0 0 0-2.82 0L10 22" /></IconBase>;
+      const Minimize = (p) => <IconBase {...p}><path d="M8 3v3a2 2 0 0 1-2 2H3" /><path d="M21 8h-3a2 2 0 0 1-2-2V3" /><path d="M3 16h3a2 2 0 0 1 2 2v3" /><path d="M16 21v-3a2 2 0 0 1 2-2h3" /></IconBase>;
+      const HardDrive = (p) => <IconBase {...p}><line x1="22" x2="2" y1="12" y2="12" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /><line x1="6" x2="6.01" y1="16" y2="16" /><line x1="10" x2="10.01" y1="16" y2="16" /></IconBase>;
+      const WifiOff = (p) => <IconBase {...p}><line x1="2" x2="22" y1="2" y2="22" /><path d="M8.5 8.5A6 6 0 0 1 12 8c2.1 0 4 .8 5.6 2.3" /><path d="M10.4 10.4a3.5 3.5 0 0 1 1.6-.4c.9 0 1.8.4 2.4 1" /><path d="M12 16a.5.5 0 1 1 0 1 .5.5 0 0 1 0-1" /><path d="M5 5.1a10 10 0 0 1 14 0" /></IconBase>;
+      const ChevronDown = (p) => <IconBase {...p}><path d="m6 9 6 6 6-6" /></IconBase>;
+      const FileCode = (p) => <IconBase {...p}><path d="M10 12.5 8 15l2 2.5" /><path d="m14 12.5 2 2.5-2 2.5" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" /></IconBase>;
+      const Package = (p) => <IconBase {...p}><path d="m7.5 4.27 9 5.15" /><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" /><path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22v-9" /></IconBase>;
+      const FileText = (p) => <IconBase {...p}><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M10 13h4" /><path d="M10 17h4" /><path d="M10 9h2" /></IconBase>;
+      const Wrench = (p) => <IconBase {...p}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></IconBase>;
+      const ArrowRight = (p) => <IconBase {...p}><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></IconBase>;
+      const Sparkles = (p) => <IconBase {...p}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M9 3v4" /><path d="M3 7h4" /><path d="M3 3h4" /></IconBase>;
+      const Mail = (p) => <IconBase {...p}><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></IconBase>;
+      const MessageSquare = (p) => <IconBase {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></IconBase>;
+      const Copy = (p) => <IconBase {...p}><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></IconBase>;
+      const Check = (p) => <IconBase {...p}><path d="M20 6 9 17l-5-5" /></IconBase>;
+      const Send = (p) => <IconBase {...p}><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></IconBase>;
+      const Upload = (p) => <IconBase {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" x2="12" y1="3" y2="15" /></IconBase>;
+      const BookOpen = (p) => <IconBase {...p}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></IconBase>;
+
+      // --- THEME CONFIG ---
+      const THEMES = {
+        slate: { name: 'Minimal', primaryBg: 'bg-slate-700', primaryHover: 'hover:bg-slate-800', textRaw: 'slate', textAccent: 'text-slate-700', bgLight: 'bg-slate-100', borderAccent: 'border-slate-300', ringFocus: 'ring-slate-500', gradientTitle: 'from-slate-700 via-gray-600 to-zinc-500', particleColor: 'rgba(71, 85, 105, 0.6)', orb1: 'bg-slate-400', orb2: 'bg-gray-400', orb3: 'bg-zinc-200' },
+        blue: { name: 'Ocean', primaryBg: 'bg-indigo-600', primaryHover: 'hover:bg-indigo-700', textRaw: 'indigo', textAccent: 'text-indigo-600', bgLight: 'bg-indigo-50', borderAccent: 'border-indigo-200', ringFocus: 'ring-indigo-500', gradientTitle: 'from-indigo-600 via-blue-500 to-sky-500', particleColor: 'rgba(79, 70, 229, 0.6)', orb1: 'bg-indigo-400', orb2: 'bg-blue-400', orb3: 'bg-sky-200' },
+        emerald: { name: 'Aurora', primaryBg: 'bg-teal-600', primaryHover: 'hover:bg-teal-700', textRaw: 'teal', textAccent: 'text-teal-600', bgLight: 'bg-teal-50', borderAccent: 'border-teal-200', ringFocus: 'ring-teal-500', gradientTitle: 'from-teal-600 via-emerald-500 to-cyan-500', particleColor: 'rgba(13, 148, 136, 0.6)', orb1: 'bg-teal-400', orb2: 'bg-emerald-400', orb3: 'bg-cyan-200' },
+        violet: { name: 'Neon', primaryBg: 'bg-purple-600', primaryHover: 'hover:bg-purple-700', textRaw: 'purple', textAccent: 'text-purple-600', bgLight: 'bg-purple-50', borderAccent: 'border-purple-200', ringFocus: 'ring-purple-500', gradientTitle: 'from-purple-600 via-violet-500 to-fuchsia-500', particleColor: 'rgba(147, 51, 234, 0.6)', orb1: 'bg-purple-400', orb2: 'bg-violet-400', orb3: 'bg-fuchsia-200' },
+        amber: { name: 'Sunset', primaryBg: 'bg-orange-600', primaryHover: 'hover:bg-orange-700', textRaw: 'orange', textAccent: 'text-orange-600', bgLight: 'bg-orange-50', borderAccent: 'border-orange-200', ringFocus: 'ring-orange-500', gradientTitle: 'from-orange-600 via-amber-600 to-yellow-500', particleColor: 'rgba(234, 88, 12, 0.6)', orb1: 'bg-orange-400', orb2: 'bg-amber-500', orb3: 'bg-yellow-200' },
+        zinc: { name: 'Onyx', primaryBg: 'bg-zinc-900', primaryHover: 'hover:bg-black', textRaw: 'zinc', textAccent: 'text-zinc-900', bgLight: 'bg-zinc-100', borderAccent: 'border-zinc-300', ringFocus: 'ring-zinc-600', gradientTitle: 'from-zinc-900 via-neutral-700 to-stone-600', particleColor: 'rgba(24, 24, 27, 0.8)', orb1: 'bg-gray-500', orb2: 'bg-zinc-600', orb3: 'bg-stone-400' },
+        rose: { name: 'Crimson', primaryBg: 'bg-rose-900', primaryHover: 'hover:bg-rose-950', textRaw: 'rose', textAccent: 'text-rose-900', bgLight: 'bg-rose-50', borderAccent: 'border-rose-200', ringFocus: 'ring-rose-600', gradientTitle: 'from-rose-900 via-red-800 to-orange-900', particleColor: 'rgba(136, 19, 55, 0.7)', orb1: 'bg-rose-400', orb2: 'bg-red-500', orb3: 'bg-orange-300' }
+      };
+
+      const TOOLS = [
+        { id: 'stitcher', path: '/stitcher', title: '长图拼接工具', description: '将多张截图或照片智能拼接成一张长图。支持纵向/横向拼接，可调节画质与尺寸，完美适配聊天记录导出。', icon: AlignVerticalSpaceAround, isPopular: true, isNew: false }
+      ];
+
+      const ThemeContext = createContext({ themeKey: 'slate', theme: THEMES.slate, setThemeKey: () => {} });
+      const useTheme = () => useContext(ThemeContext);
+
+      // --- UTILS ---
+      const stitchImages = async (images, options = { format: 'image/png', quality: 1, scale: 1, direction: 'vertical' }) => {
+        if (images.length === 0) throw new Error("No images to stitch");
+        const isVertical = options.direction === 'vertical';
+        const referenceDimension = isVertical ? Math.max(...images.map(img => img.width)) : Math.max(...images.map(img => img.height));
+        let totalSize = 0; 
+        const processedImages = images.map(img => {
+          const scaleFactor = referenceDimension / (isVertical ? img.width : img.height);
+          const scaledWidth = img.width * scaleFactor;
+          const scaledHeight = img.height * scaleFactor;
+          totalSize += isVertical ? scaledHeight : scaledWidth;
+          return { ...img, scaledWidth, scaledHeight, scaleFactor };
+        });
+        const outputWidth = (isVertical ? referenceDimension : totalSize) * options.scale;
+        const outputHeight = (isVertical ? totalSize : referenceDimension) * options.scale;
+        const canvas = document.createElement('canvas');
+        canvas.width = outputWidth;
+        canvas.height = outputHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error("Could not get canvas context");
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        let currentPos = 0;
+        for (const imgData of processedImages) {
+          const imgElement = new Image();
+          await new Promise((resolve, reject) => {
+            imgElement.onload = () => resolve();
+            imgElement.onerror = reject;
+            imgElement.src = imgData.previewUrl;
+          });
+          const drawWidth = imgData.scaledWidth * options.scale;
+          const drawHeight = imgData.scaledHeight * options.scale;
+          if (isVertical) { ctx.drawImage(imgElement, 0, currentPos, drawWidth, drawHeight); currentPos += drawHeight; } 
+          else { ctx.drawImage(imgElement, currentPos, 0, drawWidth, drawHeight); currentPos += drawWidth; }
+        }
+        const imageFormat = options.format === 'application/pdf' ? 'image/jpeg' : options.format;
+        return { url: canvas.toDataURL(imageFormat, options.quality), width: outputWidth, height: outputHeight };
+      };
+
+      // --- COMPONENTS ---
+      const ThemeSwitcher = ({ align = 'right' }) => {
+        const { themeKey, setThemeKey, theme } = useTheme();
+        const [isOpen, setIsOpen] = useState(false);
+        const menuRef = useRef(null);
+        useEffect(() => {
+          const handleClickOutside = (event) => { if (menuRef.current && !menuRef.current.contains(event.target)) setIsOpen(false); };
+          document.addEventListener('mousedown', handleClickOutside);
+          return () => document.removeEventListener('mousedown', handleClickOutside);
+        }, []);
+        
+        const alignmentClasses = align === 'right' ? 'right-0' : 'left-1/2 -translate-x-1/2 origin-top';
+
+        return (
+          <div className="relative" ref={menuRef}>
+            <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-white/50 backdrop-blur-sm hover:bg-white transition-all shadow-sm text-xs font-bold text-slate-600 group">
+               <div className={`w-3 h-3 rounded-full shadow-sm transition-colors duration-300 ${theme.primaryBg}`}></div>
+               <span className="hidden sm:inline">主题</span>
+               <ChevronDown size={12} className={`text-slate-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : 'group-hover:translate-y-0.5'}`} />
+            </button>
+            {isOpen && (
+              <div className={`absolute ${alignmentClasses} top-full mt-3 p-4 bg-white/95 backdrop-blur-xl border border-slate-200/60 rounded-2xl shadow-xl shadow-slate-200/50 w-64 z-[100] animate-in fade-in zoom-in-95 duration-200 ring-1 ring-slate-900/5`}>
+                 <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">选择配色</div>
+                 <div className="grid grid-cols-4 gap-3">
+                   {Object.keys(THEMES).map((key) => (
+                     <button key={key} onClick={() => { setThemeKey(key); setIsOpen(false); }} className={`group relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 ${THEMES[key].primaryBg} ${themeKey === key ? 'ring-2 ring-offset-2 ring-slate-400 scale-110 shadow-md' : 'hover:scale-110 opacity-80 hover:opacity-100 hover:shadow-sm'}`} title={THEMES[key].name}>
+                        {themeKey === key && <Check size={16} className="text-white" strokeWidth={3} />}
+                     </button>
+                   ))}
+                 </div>
+                 <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-center text-slate-500 font-medium">当前: {theme.name}</div>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      const ParticleBackground = () => {
+        const canvasRef = useRef(null);
+        const { theme } = useTheme();
+        useEffect(() => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+          let particles = [];
+          let animationFrameId;
+          let mouse = { x: -9999, y: -9999 };
+          const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; initParticles(); };
+          const initParticles = () => {
+            particles = [];
+            const particleCount = Math.floor(window.innerWidth * window.innerHeight / 8000); 
+            for(let i=0; i<particleCount; i++) {
+              particles.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, vx: (Math.random() - 0.5) * 1.5, vy: (Math.random() - 0.5) * 1.5, size: Math.random() * 2 + 2 });
+            }
+          };
+          const draw = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach((p, i) => {
+              p.x += p.vx; p.y += p.vy;
+              if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+              if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+              const dx = mouse.x - p.x; const dy = mouse.y - p.y; const dist = Math.sqrt(dx*dx + dy*dy);
+              if (dist < 200) { const angle = Math.atan2(dy, dx); const force = (200 - dist) / 200; const push = force * 8; p.x -= Math.cos(angle) * push; p.y -= Math.sin(angle) * push; }
+              ctx.fillStyle = theme.particleColor; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+              for (let j = i + 1; j < particles.length; j++) {
+                 const p2 = particles[j]; const dx = p.x - p2.x; const dy = p.y - p2.y; const dist = Math.sqrt(dx*dx + dy*dy);
+                 if (dist < 130) {
+                   const baseColor = theme.particleColor.includes('rgba') ? theme.particleColor.substring(0, theme.particleColor.lastIndexOf(',')) : theme.particleColor.replace(')', '');
+                   ctx.strokeStyle = `${baseColor}, ${0.4 * (1 - dist / 130)})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+                 }
+              }
+            });
+            animationFrameId = requestAnimationFrame(draw);
+          };
+          const handleMouseMove = (e) => { const rect = canvas.getBoundingClientRect(); mouse.x = e.clientX - rect.left; mouse.y = e.clientY - rect.top; };
+          const handleMouseLeave = () => { mouse.x = -9999; mouse.y = -9999; };
+          window.addEventListener('resize', resize); window.addEventListener('mousemove', handleMouseMove); window.addEventListener('mouseout', handleMouseLeave);
+          resize(); draw();
+          return () => { window.removeEventListener('resize', resize); window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseout', handleMouseLeave); cancelAnimationFrame(animationFrameId); };
+        }, [theme]);
+        return <canvas ref={canvasRef} className="absolute inset-0 z-[1] pointer-events-none transition-opacity duration-1000" />;
+      };
+
+      const ContactModal = ({ isOpen, onClose }) => {
+        const [copied, setCopied] = useState(false);
+        const { theme } = useTheme();
+        const email = "xxp8888888@gmail.com";
+        useEffect(() => { if (isOpen) setCopied(false); }, [isOpen]);
+        const handleCopy = () => { navigator.clipboard.writeText(email); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+        if (!isOpen) return null;
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200 ring-1 ring-slate-900/5">
+              <div className="p-6 text-center">
+                 <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 ${theme.bgLight} ${theme.textAccent}`}><Send size={24} /></div>
+                 <h3 className="text-xl font-bold text-slate-900 mb-2">联系开发者</h3>
+                 <p className="text-sm text-slate-500 mb-6 leading-relaxed">感谢您的关注！如果您有功能建议、Bug 反馈或合作意向，欢迎通过邮件联系。</p>
+                 <button onClick={handleCopy} className="w-full group relative flex items-center justify-between bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 transition-all active:scale-[0.98]">
+                    <div className="flex items-center gap-3"><div className="bg-white p-1.5 rounded-md border border-slate-100 shadow-sm text-slate-400"><Mail size={16} /></div><span className="text-sm font-semibold text-slate-700 font-mono">{email}</span></div>
+                    <div className="text-slate-400">{copied ? <Check size={18} className="text-green-500" /> : <Copy size={18} className="group-hover:text-slate-600" />}</div>
+                    {copied && (<div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-lg animate-in fade-in slide-in-from-bottom-2">已复制</div>)}
+                 </button>
+              </div>
+              <div className="bg-slate-50 px-6 py-3 border-t border-slate-100 flex justify-center"><button onClick={onClose} className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">关闭</button></div>
+            </div>
+          </div>
+        );
+      };
+
+      const ToolCard = ({ tool }) => {
+        const { theme, themeKey } = useTheme();
+        return (
+          <Link to={tool.path} className={`group relative bg-white/90 backdrop-blur-xl rounded-3xl border border-slate-100 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1 transition-all duration-500 overflow-hidden ring-1 ring-slate-900/5 ${themeKey === 'blue' ? 'hover:shadow-[0_20px_40px_-12px_rgba(59,130,246,0.2)]' : themeKey === 'emerald' ? 'hover:shadow-[0_20px_40px_-12px_rgba(16,185,129,0.2)]' : themeKey === 'violet' ? 'hover:shadow-[0_20px_40px_-12px_rgba(139,92,246,0.2)]' : themeKey === 'amber' ? 'hover:shadow-[0_20px_40px_-12px_rgba(249,115,22,0.2)]' : 'hover:shadow-[0_20px_40px_-12px_rgba(100,116,139,0.2)]'}`}>
+             <div className={`absolute inset-0 bg-gradient-to-br via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 ${themeKey === 'blue' ? 'from-blue-100/40' : themeKey === 'emerald' ? 'from-emerald-100/40' : themeKey === 'violet' ? 'from-violet-100/40' : themeKey === 'amber' ? 'from-orange-100/40' : 'from-slate-200/40'}`}></div>
+             <div className="relative z-10 flex flex-col h-full">
+                <div className="flex justify-between items-start mb-6">
+                  <div className={`p-3.5 bg-white rounded-2xl text-slate-600 group-hover:text-white transition-all duration-300 shadow-sm border border-slate-100 ${themeKey==='slate' ? 'group-hover:bg-slate-700' : theme.primaryHover.replace('hover:', 'group-hover:')} `}>
+                    <tool.icon size={24} />
+                  </div>
+                  {tool.isPopular && (<div className={`backdrop-blur border px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide flex items-center gap-1 ${theme.bgLight} ${theme.textAccent} ${theme.borderAccent}`}><Sparkles size={10} /> Popular</div>)}
+                </div>
+                <h3 className={`text-xl font-bold text-slate-900 mb-3 transition-colors ${themeKey === 'slate' ? 'group-hover:text-slate-700' : `group-hover:${theme.textAccent}`}`}>{tool.title}</h3>
+                <p className="text-slate-500 text-sm leading-relaxed mb-8 flex-1">{tool.description}</p>
+                <div className={`flex items-center text-sm font-bold opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 ${theme.textAccent}`}>开始使用 <ArrowRight size={16} className="ml-1" /></div>
+             </div>
+          </Link>
+        );
+      };
+
+      const HomePage = () => {
+        const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
+        const [isContactOpen, setIsContactOpen] = useState(false);
+        const downloadMenuRef = useRef(null);
+        const { theme, themeKey } = useTheme();
+        const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+        useEffect(() => { const handleMouseMove = (e) => { setMousePos({ x: (e.clientX / window.innerWidth - 0.5) * 30, y: (e.clientY / window.innerHeight - 0.5) * 30 }); }; window.addEventListener('mousemove', handleMouseMove); return () => window.removeEventListener('mousemove', handleMouseMove); }, []);
+        return (
+          <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-slate-200 selection:text-slate-900 relative overflow-x-hidden">
+            <div className="fixed inset-0 z-0 overflow-hidden bg-white">
+               <div className={`absolute top-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full mix-blend-multiply filter blur-[90px] opacity-60 animate-blob transition-colors duration-1000 ${theme.orb1}`} style={{ transform: `translate(${mousePos.x * -1}px, ${mousePos.y * -1}px)` }}></div>
+               <div className={`absolute top-[10%] right-[-10%] w-[500px] h-[500px] rounded-full mix-blend-multiply filter blur-[90px] opacity-60 animate-blob animation-delay-2000 transition-colors duration-1000 ${theme.orb2}`} style={{ transform: `translate(${mousePos.x}px, ${mousePos.y * -1}px)` }}></div>
+               <div className={`absolute -bottom-32 left-[20%] w-[700px] h-[700px] rounded-full mix-blend-multiply filter blur-[100px] opacity-70 animate-blob animation-delay-4000 transition-colors duration-1000 ${theme.orb3}`} style={{ transform: `translate(${mousePos.x * -0.5}px, ${mousePos.y}px)` }}></div>
+               <ParticleBackground />
+            </div>
+            <nav className="fixed top-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-6 lg:px-12 bg-white/60 backdrop-blur-md border-b border-white/40 transition-all">
+               <div className="flex items-center gap-3 font-bold text-lg tracking-tight text-slate-900 cursor-default select-none">
+                  <div className={`text-white p-1.5 rounded-lg shadow-lg shadow-slate-900/20 transition-colors duration-500 ${themeKey === 'slate' ? 'bg-slate-700' : theme.primaryBg}`}><Wrench size={16} strokeWidth={2.5} /></div>
+                  <span>我的在线工具箱</span>
+               </div>
+               <div className="flex items-center gap-4">
+                   <div className="hidden sm:block"><ThemeSwitcher /></div>
+                   <div className="relative">
+                      <button className="group flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-600 hover:text-slate-900 bg-white/40 hover:bg-white border border-white/50 hover:border-slate-300 rounded-full transition-all shadow-sm backdrop-blur-sm cursor-not-allowed opacity-70" title="离线版已内置源码">
+                        <FileCode size={14} className={`transition-colors duration-300 ${theme.textAccent}`} /><span>离线版</span>
+                      </button>
+                   </div>
+               </div>
+            </nav>
+            <header className="relative pt-36 pb-24 lg:pt-52 lg:pb-36 overflow-hidden z-10">
+              <div className="max-w-5xl mx-auto px-4 text-center">
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/40 border border-white/60 backdrop-blur-md text-slate-600 text-xs font-semibold mb-8 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-700 hover:bg-white/80 hover:scale-105 transition-all cursor-default group">
+                   <span className="relative flex h-2 w-2"><span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${themeKey === 'slate' ? 'bg-slate-400' : theme.primaryBg}`}></span><span className={`relative inline-flex rounded-full h-2 w-2 ${themeKey === 'slate' ? 'bg-slate-500' : theme.primaryBg}`}></span></span>
+                   <span className="group-hover:text-slate-900 transition-colors">纯前端运行，数据安全无忧</span>
+                </div>
+                <h1 className="text-5xl sm:text-7xl lg:text-8xl font-black tracking-tighter text-slate-900 mb-8 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100 drop-shadow-sm leading-tight">
+                  我的在线<br className="sm:hidden" />
+                  <span className={`relative whitespace-nowrap bg-clip-text text-transparent bg-gradient-to-r ${theme.gradientTitle} animate-gradient-x`}>
+                     <span className="ml-2">工具箱</span>
+                     <span className={`absolute -bottom-2 left-0 right-0 h-[6px] rounded-full blur-sm opacity-30 ${theme.primaryBg}`}></span>
+                  </span>
+                </h1>
+                <p className="text-lg sm:text-xl text-slate-500 max-w-2xl mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200 font-medium">为您精心打造的实用工具集合。<br className="hidden sm:block" />简单、高效、保护隐私，只为更好的工作效率。</p>
+                <div className="sm:hidden mt-8 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300"><div className="flex justify-center"><ThemeSwitcher align="center" /></div></div>
+              </div>
+            </header>
+            <main className="max-w-6xl mx-auto px-6 pb-40 relative z-10 animate-in fade-in duration-1000 delay-300">
+              <div className="flex items-center gap-4 mb-10"><h2 className="text-sm font-bold text-slate-900 tracking-wider uppercase border-b-2 border-slate-900 pb-1">全部工具</h2><div className="h-px flex-1 bg-gradient-to-r from-slate-300 to-transparent"></div></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {TOOLS.map(tool => (<ToolCard key={tool.id} tool={tool} />))}
+                <div className={`relative bg-white/60 backdrop-blur-md rounded-3xl border border-dashed border-slate-200 p-6 flex flex-col items-center justify-center text-center group min-h-[260px] hover:bg-white/80 transition-colors`}>
+                   <div className={`p-4 bg-white/50 rounded-full mb-4 shadow-sm text-slate-300 group-hover:scale-110 transition-all duration-300 ${themeKey === 'slate' ? 'group-hover:text-slate-500' : `group-hover:${theme.textAccent}`}`}><Plus size={24} /></div>
+                   <h3 className="text-base font-bold text-slate-400 mb-1 group-hover:text-slate-600 transition-colors">更多工具开发中</h3>
+                   <p className="text-xs text-slate-400 max-w-[150px] mx-auto leading-relaxed">我们正在努力开发更多实用的工具，敬请期待。</p>
+                </div>
+              </div>
+            </main>
+            <footer className="border-t border-slate-200/50 bg-white/40 backdrop-blur-xl relative z-20">
+              <div className="max-w-7xl mx-auto px-6 py-12 lg:py-16">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="text-center md:text-left">
+                    <div className="flex items-center justify-center md:justify-start gap-2.5 font-bold text-slate-900 mb-3"><div className="w-6 h-6 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-lg shadow-slate-900/20"><Wrench size={12} strokeWidth={3} /></div><span className="text-lg tracking-tight">我的在线工具箱</span></div>
+                    <p className="text-slate-500 text-xs font-medium tracking-wide opacity-80">&copy; {new Date().getFullYear()} ONLINE TOOLBOX. Designed & Built for privacy.</p>
+                  </div>
+                  <div className="flex flex-col items-center md:items-end gap-3">
+                     <div className="flex items-center gap-2 text-sm font-medium text-slate-600"><MessageSquare size={14} className={theme.textAccent} /><span>有建议或发现 Bug？</span></div>
+                     <button onClick={() => setIsContactOpen(true)} className={`group flex items-center gap-3 pl-5 pr-2 py-1.5 text-white rounded-full hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 ${themeKey === 'slate' ? 'bg-slate-700 hover:bg-slate-800' : `${theme.primaryBg} ${theme.primaryHover}`}`}><span className="font-bold text-xs tracking-wide py-1.5">联系开发者</span><div className="p-1.5 bg-white/10 rounded-full group-hover:bg-white/20 transition-colors"><ArrowRight size={14} /></div></button>
+                  </div>
+                </div>
+              </div>
+            </footer>
+            <ContactModal isOpen={isContactOpen} onClose={() => setIsContactOpen(false)} />
+          </div>
+        );
+      };
+
+      const StitcherTool = () => {
+        const navigate = useNavigate(); const { theme, themeKey } = useTheme();
+        const [images, setImages] = useState([]); const [direction, setDirection] = useState('vertical'); const [zoom, setZoom] = useState(1); const [isExportOpen, setIsExportOpen] = useState(false); const [isProcessing, setIsProcessing] = useState(false);
+        useEffect(() => { if (images.length === 0) setZoom(1); }, [images.length, direction]);
+        const handleFileUpload = async (files) => { if (!files) return; const newImages = []; for (let i = 0; i < files.length; i++) { const file = files[i]; if (!file.type.startsWith('image/')) continue; const url = URL.createObjectURL(file); const img = new Image(); img.src = url; await new Promise((resolve) => { img.onload = () => resolve(); }); newImages.push({ id: Math.random().toString(36).substr(2, 9), file, previewUrl: url, width: img.width, height: img.height }); } setImages(prev => [...prev, ...newImages]); };
+        const onDrop = (e) => { e.preventDefault(); handleFileUpload(e.dataTransfer.files); }; const onFileChange = (e) => { handleFileUpload(e.target.files); };
+        const moveImage = (index, dir) => { const newImages = [...images]; const targetIndex = dir === 'up' ? index - 1 : index + 1; if (targetIndex >= 0 && targetIndex < newImages.length) { [newImages[index], newImages[targetIndex]] = [newImages[targetIndex], newImages[index]]; setImages(newImages); } };
+        const removeImage = (id) => { setImages(prev => prev.filter(img => img.id !== id)); };
+        const handleExport = async (options) => { setIsProcessing(true); try { const result = await stitchImages(images, options); if (options.format === 'application/pdf') { const pdf = new jsPDF({ orientation: result.width > result.height ? 'l' : 'p', unit: 'px', format: [result.width, result.height], hotfixes: ["px_scaling"] }); pdf.addImage(result.url, 'JPEG', 0, 0, result.width, result.height); pdf.save('stitched-image.pdf'); } else { const link = document.createElement('a'); link.href = result.url; link.download = `stitched-${new Date().getTime()}.${options.format.split('/')[1]}`; link.click(); } setIsExportOpen(false); } catch (error) { console.error("Export failed", error); alert("导出失败，请重试"); } finally { setIsProcessing(false); } };
+        return (
+          <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 selection:bg-slate-200 selection:text-slate-900">
+            <nav className="h-16 bg-white/80 backdrop-blur-xl border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 shrink-0 sticky top-0 z-50">
+              <div className="flex items-center gap-4"><button onClick={() => navigate('/')} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500"><Home size={20} /></button><div className="h-6 w-px bg-slate-200"></div><h1 className="font-bold text-slate-700 flex items-center gap-2"><div className={`p-1 rounded-lg ${themeKey === 'slate' ? 'bg-slate-700 text-white' : `${theme.primaryBg} text-white`}`}><AlignVerticalSpaceAround size={16} /></div><span className="hidden sm:inline">长图拼接工具</span></h1></div>
+              <div className="flex items-center gap-3"><ThemeSwitcher /><button onClick={() => setIsExportOpen(true)} disabled={images.length === 0} className={`px-4 py-2 rounded-full text-sm font-bold text-white shadow-lg shadow-slate-200 transition-all flex items-center gap-2 disabled:opacity-50 disabled:shadow-none ${theme.primaryBg} ${theme.primaryHover}`}><Download size={16} /><span className="hidden sm:inline">导出</span></button></div>
+            </nav>
+            <main className="flex-1 overflow-hidden flex flex-col lg:flex-row relative">
+               <aside className="w-full lg:w-96 bg-white border-r border-slate-200 flex flex-col z-20 shadow-xl shadow-slate-200/50">
+                  <div className="p-4 border-b border-slate-100 flex gap-2"><button onClick={() => setDirection('vertical')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border-2 transition-all duration-300 ${direction === 'vertical' ? `${theme.borderAccent} ${theme.bgLight} ${theme.textAccent}` : 'border-transparent bg-slate-50 text-slate-500 hover:bg-slate-100'}`}><AlignVerticalSpaceAround size={16} />纵向拼接</button><button onClick={() => setDirection('horizontal')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border-2 transition-all duration-300 ${direction === 'horizontal' ? `${theme.borderAccent} ${theme.bgLight} ${theme.textAccent}` : 'border-transparent bg-slate-50 text-slate-500 hover:bg-slate-100'}`}><AlignHorizontalSpaceAround size={16} />横向拼接</button></div>
+                  <div className={`p-4 transition-all duration-300 ${images.length === 0 ? 'flex-1 flex flex-col justify-center' : ''}`} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+                     <input type="file" id="image-upload" multiple accept="image/*" className="hidden" onChange={onFileChange} />
+                     <label htmlFor="image-upload" className={`group relative flex flex-col items-center justify-center border-2 border-dashed rounded-2xl cursor-pointer transition-all duration-300 overflow-hidden ${images.length === 0 ? 'h-64 bg-slate-50 border-slate-300 hover:border-slate-400' : `h-20 bg-slate-50 border-slate-200 hover:bg-white ${themeKey === 'slate' ? 'hover:border-slate-400' : `hover:${theme.borderAccent}`}`}`}>
+                        {images.length === 0 ? (<><div className={`p-4 rounded-full mb-4 transition-transform group-hover:scale-110 duration-300 ${theme.bgLight} ${theme.textAccent}`}><Upload size={32} /></div><p className="font-bold text-slate-700 mb-1">点击或拖拽上传图片</p><p className="text-xs text-slate-400">支持 JPG, PNG, WEBP</p></>) : (<div className="flex items-center gap-3 text-slate-500 group-hover:text-slate-700"><Plus size={20} /><span className="text-sm font-bold">添加更多图片</span></div>)}
+                     </label>
+                  </div>
+                  {images.length > 0 && (<div className="flex-1 overflow-y-auto p-4 pt-0 custom-scrollbar"><div className="flex items-center justify-between mb-3 px-1"><span className="text-xs font-bold text-slate-400 uppercase tracking-wider">已添加 {images.length} 张</span><button onClick={() => setImages([])} className="text-xs text-red-400 hover:text-red-500 font-medium flex items-center gap-1"><Trash2 size={12} /> 清空</button></div><ImageList images={images} onMove={moveImage} onRemove={removeImage} /></div>)}
+               </aside>
+               <div className="flex-1 bg-slate-100/50 relative overflow-hidden flex flex-col">
+                  <div className="absolute inset-0 opacity-40 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+                  <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-white/80 backdrop-blur-md p-1.5 rounded-full shadow-sm border border-slate-200/60">
+                     <button onClick={() => setZoom(z => Math.max(0.1, z - 0.1))} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white text-slate-500 hover:text-slate-800 transition-colors"><Minus size={16} /></button><span className="text-xs font-bold text-slate-600 w-12 text-center tabular-nums">{Math.round(zoom * 100)}%</span><button onClick={() => setZoom(z => Math.min(3, z + 0.1))} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white text-slate-500 hover:text-slate-800 transition-colors"><Plus size={16} /></button>
+                  </div>
+                  <div className="flex-1 overflow-auto p-8 lg:p-12 flex items-start justify-center custom-scrollbar" onClick={(e) => { if (e.target === e.currentTarget) { /* Background click */ } }}>
+                     {images.length > 0 ? (<StitcherPreview images={images} direction={direction} zoom={zoom} />) : (<div className="m-auto text-center"><div className="w-24 h-24 bg-slate-200/50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300"><ImageIcon size={40} /></div><p className="text-slate-400 font-medium">暂无预览内容</p></div>)}
+                  </div>
+               </div>
+            </main>
+            <ExportModal isOpen={isExportOpen} onClose={() => setIsExportOpen(false)} onConfirm={handleExport} isProcessing={isProcessing} images={images} direction={direction} theme={theme} />
+          </div>
+        );
+      };
+
+      const ToolboxApp = () => {
+         const [themeKey, setThemeKey] = useState('slate');
+         return (
+          <ThemeContext.Provider value={{ themeKey, theme: THEMES[themeKey], setThemeKey }}>
+            <HashRouter>
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/stitcher" element={<StitcherTool />} />
+              </Routes>
+            </HashRouter>
+          </ThemeContext.Provider>
+         );
+      };
+      
+      const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<ToolboxApp />);
+    </script>
+  </body>
+</html>
